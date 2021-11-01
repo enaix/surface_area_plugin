@@ -12,17 +12,17 @@ import bmesh
 class ObjectSurfaceSettings(bpy.types.AddonPreferences):
     bl_idname = __name__
     
-    create_clone = BoolProperty(
+    create_clone: BoolProperty(
         name = "Apply scale transformation to a clone",
         default = False,
     )
     
-    use_advanced_method = BoolProperty(
+    use_advanced_method: BoolProperty(
         name = "Use bmesh instead of fast iteration",
         default = False,
     )
     
-    create_context = BoolProperty(
+    create_context: BoolProperty(
         name = "Create another context for an object clone (not implemented)",
         default = False,
         options={'ANIMATABLE', 'HIDDEN'}
@@ -147,13 +147,13 @@ def menu_func(self, context):
     self.layout.operator(ObjectSurface.bl_idname)
 
 def register():
-    bpy.utils.register_class(ObjectSurface)
     bpy.utils.register_class(ObjectSurfaceSettings)
+    bpy.utils.register_class(ObjectSurface)
     bpy.types.VIEW3D_MT_edit_mesh.append(menu_func)
 
 def unregister():
-    bpy.utils.unregister_class(ObjectSurface)
     bpy.utils.unregister_class(ObjectSurfaceSettings)
+    bpy.utils.unregister_class(ObjectSurface)
     
 if __name__ == "__main__":
     register()
