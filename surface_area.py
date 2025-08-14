@@ -1,6 +1,6 @@
 bl_info = {
     "name": "Calculate surface area",
-    "blender": (2, 80, 0),
+    "blender": (4, 5, 0),
     "category": "Object",
 }
 
@@ -10,7 +10,7 @@ import numpy as np
 import bmesh
 
 class ObjectSurfaceSettings(bpy.types.AddonPreferences):
-    bl_idname = __name__
+    bl_idname = __package__ if __package__ else __name__
     
     create_clone: BoolProperty(
         name = "Apply scale transformation to a clone",
@@ -42,13 +42,27 @@ class ObjectSurface(bpy.types.Operator):
     bl_label = "Calculate surface area"
     bl_options = {'REGISTER'}
     
-    def __init__(self):
-        self.create_clone = False
-        self.use_advanced_method = False
-        self.create_context = False
-    
     def handle_prefs(self, context):
-        addon_prefs = context.preferences.addons[__name__].preferences
+        # Resolve addon preferences robustly across single-file and package installs
+        addon_key_candidates = [
+            getattr(ObjectSurfaceSettings, 'bl_idname', None),
+            __name__,
+            __package__ if __package__ else None,
+        ]
+        addon_prefs = None
+        for key in addon_key_candidates:
+            if not key:
+                continue
+            addon = context.preferences.addons.get(key)
+            if addon:
+                addon_prefs = addon.preferences
+                break
+        if addon_prefs is None:
+            # Fallback to default values if preferences are unavailable
+            self.create_clone = False
+            self.use_advanced_method = False
+            self.create_context = False
+            return
         self.create_clone = addon_prefs.create_clone
         self.use_advanced_method = addon_prefs.use_advanced_method
         self.create_context = addon_prefs.create_context
@@ -79,15 +93,16 @@ class ObjectSurface(bpy.types.Operator):
         if clone is None:
             return
         
-        if self.create_context:
-            bpy.ops.object.delete(context)
-        else:
-            bpy.ops.object.select_all(action='DESELECT')
-            clone.select_set(True)
-            bpy.ops.object.delete()
+        # Safely remove the temporary clone without relying on operators
+        try:
+            bpy.data.objects.remove(clone, do_unlink=True)
+        except ReferenceError:
+            pass
         
+        # Restore selection to the original source object
         bpy.ops.object.select_all(action='DESELECT')
-        source.select_set(True)
+        if source is not None:
+            source.select_set(True)
     
     def get_area_bmesh(self, context, obj):
         bm = bmesh.new()
@@ -106,7 +121,7 @@ class ObjectSurface(bpy.types.Operator):
     def get_area_simple(self, context, obj):
         pol = obj.data.polygons
         f_areas = np.zeros(len(pol), dtype=np.float32)
-        f_select = np.zeros(len(pol), dtype=np.bool)
+        f_select = np.zeros(len(pol), dtype=np.bool_)
         
         pol.foreach_get('select', f_select)
         pol.foreach_get('area', f_areas)
@@ -139,7 +154,7 @@ class ObjectSurface(bpy.types.Operator):
         self.destroy_obj(ctx, clone, source)
         
         bpy.ops.object.mode_set(mode=mode)
-        self.report({'INFO'}, "Selected surface area is " + str(area) + " m")
+        self.report({'INFO'}, "Selected surface area is " + str(area) + " m²")
         
         return {'FINISHED'}
 
@@ -154,6 +169,10 @@ def register():
 def unregister():
     bpy.utils.unregister_class(ObjectSurfaceSettings)
     bpy.utils.unregister_class(ObjectSurface)
+    try:
+        bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
+    except Exception:
+        pass
     
 if __name__ == "__main__":
     register()
